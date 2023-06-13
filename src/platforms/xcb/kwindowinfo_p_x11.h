@@ -7,14 +7,15 @@
 #ifndef KWINDOWINFO_P_X11_H
 #define KWINDOWINFO_P_X11_H
 #include "kwindowinfo_p.h"
-#include <QScopedPointer>
+#include <memory>
 
 class NETWinInfo;
 
 class KWindowInfoPrivateX11 : public KWindowInfoPrivate,
                               public KWindowInfoPrivateDesktopFileNameExtension,
                               public KWindowInfoPrivatePidExtension,
-                              public KWindowInfoPrivateAppMenuExtension
+                              public KWindowInfoPrivateAppMenuExtension,
+                              public KWindowInfoPrivateGtkApplicationIdExtension
 {
 public:
     KWindowInfoPrivateX11(WId window, NET::Properties properties, NET::Properties2 properties2);
@@ -49,11 +50,14 @@ public:
     QByteArray desktopFileName() const override;
     QByteArray applicationMenuObjectPath() const override;
     QByteArray applicationMenuServiceName() const override;
+    QByteArray gtkApplicationId() const override;
 
     int pid() const override;
 
 private:
-    QScopedPointer<NETWinInfo> m_info;
+    bool icccmCompliantMappingState() const;
+
+    std::unique_ptr<NETWinInfo> m_info;
     QString m_name;
     QString m_iconic_name;
     QRect m_geometry;

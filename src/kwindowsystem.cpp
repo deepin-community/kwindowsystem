@@ -4,6 +4,7 @@
     SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
 */
 #include "kwindowsystem.h"
+#include "kstartupinfo.h"
 #include "kwindowsystem_dummy_p.h"
 #include "kwindowsystemplugininterface_p.h"
 #include "pluginwrapper_p.h"
@@ -14,11 +15,17 @@
 #include <QMetaMethod>
 #include <QPixmap>
 #include <QPluginLoader>
+#include <QTimer>
 #if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 62)
 #include <QWidget>
 #endif
 #include <QWindow>
 #if KWINDOWSYSTEM_HAVE_X11
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <private/qtx11extras_p.h>
+#else
+#include <QX11Info>
+#endif
 #endif
 
 // QPoint and QSize all have handy / operators which are useful for scaling, positions and sizes for high DPI support
@@ -41,18 +48,18 @@ public:
     }
     KWindowSystemPrivate *xcbPlugin()
     {
-        if (xcbPrivate.isNull()) {
+        if (!xcbPrivate) {
             QPluginLoader loader(QStringLiteral(XCB_PLUGIN_PATH));
-            QScopedPointer<KWindowSystemPluginInterface> xcbPlugin(qobject_cast<KWindowSystemPluginInterface *>(loader.instance()));
-            if (!xcbPlugin.isNull()) {
+            std::unique_ptr<KWindowSystemPluginInterface> xcbPlugin(qobject_cast<KWindowSystemPluginInterface *>(loader.instance()));
+            if (xcbPlugin) {
                 xcbPrivate.reset(xcbPlugin->createWindowSystem());
             }
         }
-        return xcbPrivate.data();
+        return xcbPrivate.get();
     }
     KWindowSystem kwm;
-    QScopedPointer<KWindowSystemPrivate> d;
-    QScopedPointer<KWindowSystemPrivate> xcbPrivate;
+    std::unique_ptr<KWindowSystemPrivate> d;
+    std::unique_ptr<KWindowSystemPrivate> xcbPrivate;
 };
 
 Q_GLOBAL_STATIC(KWindowSystemStaticContainer, g_kwmInstanceContainer)
@@ -98,15 +105,17 @@ void KWindowSystemPrivateDummy::forceActiveWindow(WId win, long time)
     Q_UNUSED(time)
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystemPrivateDummy::demandAttention(WId win, bool set)
 {
     Q_UNUSED(win)
     Q_UNUSED(set)
 }
+#endif
 
 bool KWindowSystemPrivateDummy::compositingActive()
 {
-    return false;
+    return KWindowSystem::isPlatformWayland();
 }
 
 int KWindowSystemPrivateDummy::currentDesktop()
@@ -166,12 +175,14 @@ QPixmap KWindowSystemPrivateDummy::icon(WId win, int width, int height, bool sca
     return QPixmap();
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystemPrivateDummy::setIcons(WId win, const QPixmap &icon, const QPixmap &miniIcon)
 {
     Q_UNUSED(win)
     Q_UNUSED(icon)
     Q_UNUSED(miniIcon)
 }
+#endif
 
 void KWindowSystemPrivateDummy::setType(WId win, NET::WindowType windowType)
 {
@@ -360,7 +371,7 @@ KWindowSystem *KWindowSystem::self()
 
 KWindowSystemPrivate *KWindowSystem::d_func()
 {
-    return g_kwmInstanceContainer()->d.data();
+    return g_kwmInstanceContainer()->d.get();
 }
 
 void KWindowSystem::connectNotify(const QMetaMethod &signal)
@@ -370,11 +381,13 @@ void KWindowSystem::connectNotify(const QMetaMethod &signal)
     QObject::connectNotify(signal);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QList<WId> KWindowSystem::windows()
 {
     Q_D(KWindowSystem);
     return d->windows();
 }
+#endif
 
 #if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 0)
 KWindowInfo KWindowSystem::windowInfo(WId win, NET::Properties properties, NET::Properties2 properties2)
@@ -383,85 +396,106 @@ KWindowInfo KWindowSystem::windowInfo(WId win, NET::Properties properties, NET::
 }
 #endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 bool KWindowSystem::hasWId(WId w)
 {
     return windows().contains(w);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QList<WId> KWindowSystem::stackingOrder()
 {
     Q_D(KWindowSystem);
     return d->stackingOrder();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 int KWindowSystem::currentDesktop()
 {
     Q_D(KWindowSystem);
     return d->currentDesktop();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 int KWindowSystem::numberOfDesktops()
 {
     Q_D(KWindowSystem);
     return d->numberOfDesktops();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setCurrentDesktop(int desktop)
 {
     Q_D(KWindowSystem);
     d->setCurrentDesktop(desktop);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setOnAllDesktops(WId win, bool b)
 {
     Q_D(KWindowSystem);
     d->setOnAllDesktops(win, b);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setOnDesktop(WId win, int desktop)
 {
     Q_D(KWindowSystem);
     d->setOnDesktop(win, desktop);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setOnActivities(WId win, const QStringList &activities)
 {
     Q_D(KWindowSystem);
     d->setOnActivities(win, activities);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 WId KWindowSystem::activeWindow()
 {
     Q_D(KWindowSystem);
     return d->activeWindow();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::activateWindow(WId win, long time)
 {
     Q_D(KWindowSystem);
     d->activateWindow(win, time);
 }
+#endif
 
 void KWindowSystem::activateWindow(QWindow *win, long time)
 {
-    // If it's not yet exposed, there's nothing to activate
-    if (!win->isExposed())
-        return;
-
-    activateWindow(win->winId(), time);
+    Q_D(KWindowSystem);
+    d->activateWindow(win->winId(), time);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::forceActiveWindow(WId win, long time)
 {
     Q_D(KWindowSystem);
     d->forceActiveWindow(win, time);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::demandAttention(WId win, bool set)
 {
     Q_D(KWindowSystem);
     d->demandAttention(win, set);
 }
+#endif
 
 #if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 0)
 WId KWindowSystem::transientFor(WId win)
@@ -500,17 +534,22 @@ WId KWindowSystem::groupLeader(WId win)
 }
 #endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QPixmap KWindowSystem::icon(WId win, int width, int height, bool scale)
 {
     return icon(win, width, height, scale, NETWM | WMHints | ClassHint | XApp);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QPixmap KWindowSystem::icon(WId win, int width, int height, bool scale, int flags)
 {
     Q_D(KWindowSystem);
     return d->icon(win, width, height, scale, flags);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QPixmap KWindowSystem::icon(WId win, int width, int height, bool scale, int flags, NETWinInfo *info)
 {
     Q_D(KWindowSystem);
@@ -533,12 +572,15 @@ QPixmap KWindowSystem::icon(WId win, int width, int height, bool scale, int flag
 #endif
     return d->icon(win, width, height, scale, flags);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setIcons(WId win, const QPixmap &icon, const QPixmap &miniIcon)
 {
     Q_D(KWindowSystem);
     d->setIcons(win, icon, miniIcon);
 }
+#endif
 
 void KWindowSystem::setType(WId win, NET::WindowType windowType)
 {
@@ -558,17 +600,21 @@ void KWindowSystem::clearState(WId win, NET::States state)
     d->clearState(win, state);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::minimizeWindow(WId win)
 {
     Q_D(KWindowSystem);
     d->minimizeWindow(win);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::unminimizeWindow(WId win)
 {
     Q_D(KWindowSystem);
     d->unminimizeWindow(win);
 }
+#endif
 
 #if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 0)
 void KWindowSystem::minimizeWindow(WId win, bool animation)
@@ -592,41 +638,53 @@ void KWindowSystem::raiseWindow(WId win)
     d->raiseWindow(win);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::lowerWindow(WId win)
 {
     Q_D(KWindowSystem);
     d->lowerWindow(win);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 bool KWindowSystem::compositingActive()
 {
     Q_D(KWindowSystem);
     return d->compositingActive();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QRect KWindowSystem::workArea(int desktop)
 {
     Q_D(KWindowSystem);
     return d->workArea(desktop) / qApp->devicePixelRatio();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QRect KWindowSystem::workArea(const QList<WId> &exclude, int desktop)
 {
     Q_D(KWindowSystem);
     return d->workArea(exclude, desktop) / qApp->devicePixelRatio();
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QString KWindowSystem::desktopName(int desktop)
 {
     Q_D(KWindowSystem);
     return d->desktopName(desktop);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setDesktopName(int desktop, const QString &name)
 {
     Q_D(KWindowSystem);
     d->setDesktopName(desktop, name);
 }
+#endif
 
 bool KWindowSystem::showingDesktop()
 {
@@ -640,12 +698,15 @@ void KWindowSystem::setShowingDesktop(bool showing)
     return d->setShowingDesktop(showing);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setUserTime(WId win, long time)
 {
     Q_D(KWindowSystem);
     d->setUserTime(win, time);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setExtendedStrut(WId win,
                                      int left_width,
                                      int left_start,
@@ -676,19 +737,24 @@ void KWindowSystem::setExtendedStrut(WId win,
                         bottom_start * dpr,
                         bottom_end * dpr);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setStrut(WId win, int left, int right, int top, int bottom)
 {
     Q_D(KWindowSystem);
     const qreal dpr = qApp->devicePixelRatio();
     d->setStrut(win, left * dpr, right * dpr, top * dpr, bottom * dpr);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 bool KWindowSystem::icccmCompliantMappingState()
 {
     Q_D(KWindowSystem);
     return d->icccmCompliantMappingState();
 }
+#endif
 
 bool KWindowSystem::allowedActionsSupported()
 {
@@ -696,11 +762,13 @@ bool KWindowSystem::allowedActionsSupported()
     return d->allowedActionsSupported();
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QString KWindowSystem::readNameProperty(WId win, unsigned long atom)
 {
     Q_D(KWindowSystem);
     return d->readNameProperty(win, atom);
 }
+#endif
 
 void KWindowSystem::allowExternalProcessWindowActivation(int pid)
 {
@@ -708,17 +776,21 @@ void KWindowSystem::allowExternalProcessWindowActivation(int pid)
     d->allowExternalProcessWindowActivation(pid);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 void KWindowSystem::setBlockingCompositing(WId window, bool active)
 {
     Q_D(KWindowSystem);
     d->setBlockingCompositing(window, active);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 bool KWindowSystem::mapViewport()
 {
     Q_D(KWindowSystem);
     return d->mapViewport();
 }
+#endif
 
 int KWindowSystem::viewportToDesktop(const QPoint &p)
 {
@@ -738,11 +810,13 @@ QPoint KWindowSystem::desktopToViewport(int desktop, bool absolute)
     return d->desktopToViewport(desktop, absolute);
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 101)
 QPoint KWindowSystem::constrainViewportRelativePosition(const QPoint &pos)
 {
     Q_D(KWindowSystem);
     return d->constrainViewportRelativePosition(pos / qApp->devicePixelRatio());
 }
+#endif
 
 static inline KWindowSystem::Platform initPlatform()
 {
@@ -781,12 +855,40 @@ bool KWindowSystem::isPlatformWayland()
     return platform() == Platform::Wayland;
 }
 
+void KWindowSystem::updateStartupId(QWindow *window)
+{
+    // clang-format off
+    // TODO: move to a new KWindowSystemPrivate interface
+#if KWINDOWSYSTEM_HAVE_X11
+    if (isPlatformX11()) {
+        const QByteArray startupId = QX11Info::nextStartupId();
+        if (!startupId.isEmpty()) {
+            KStartupInfo::setNewStartupId(window, startupId);
+        }
+    } else
+#else
+    Q_UNUSED(window);
+#endif
+    if (isPlatformWayland()) {
+        const QString token = qEnvironmentVariable("XDG_ACTIVATION_TOKEN");
+        if (!token.isEmpty()) {
+            setCurrentXdgActivationToken(token);
+            qunsetenv("XDG_ACTIVATION_TOKEN");
+        }
+    }
+    // clang-format on
+}
+
 void KWindowSystem::requestXdgActivationToken(QWindow *win, uint32_t serial, const QString &app_id)
 {
     Q_D(KWindowSystem);
     auto dv2 = dynamic_cast<KWindowSystemPrivateV2 *>(d);
     if (!dv2) {
-        Q_EMIT KWindowSystem::self()->xdgActivationTokenArrived(serial, {});
+        // Ensure that xdgActivationTokenArrived is always emitted asynchronously
+        QTimer::singleShot(0, [serial] {
+            Q_EMIT KWindowSystem::self()->xdgActivationTokenArrived(serial, {});
+        });
+
         return;
     }
     dv2->requestToken(win, serial, app_id);

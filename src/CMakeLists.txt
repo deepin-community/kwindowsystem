@@ -14,7 +14,6 @@ target_sources(KF5WindowSystem PRIVATE
     kwindowinfo.cpp
     kwindowshadow.cpp
     kwindowsystem.cpp
-    platforms/wayland/kwindowsystem.cpp
     pluginwrapper.cpp
     kwindowsystemplugininterface.cpp
     )
@@ -36,15 +35,6 @@ ecm_qt_declare_logging_category(KF5WindowSystem
     DESCRIPTION "KKeyServer (KWindowSystem)"
     EXPORT KWINDOWSYSTEM
 )
-
-if (KWINDOWSYSTEM_HAVE_X11)
-  target_sources(KF5WindowSystem PRIVATE
-    platforms/xcb/kselectionowner.cpp
-    platforms/xcb/kselectionwatcher.cpp
-    platforms/xcb/kxerrorhandler.cpp
-    platforms/xcb/kxutils.cpp
-  )
-endif()
 
 if (KWINDOWSYSTEM_HAVE_X11)
    if(NOT X11_Xfixes_LIB)
@@ -75,8 +65,13 @@ if (KWINDOWSYSTEM_HAVE_X11)
 
    target_sources(KF5WindowSystem PRIVATE
         platforms/xcb/kkeyserver.cpp
+        platforms/xcb/kselectionowner.cpp
+        platforms/xcb/kselectionwatcher.cpp
+        platforms/xcb/kxerrorhandler.cpp
         platforms/xcb/kxmessages.cpp
+        platforms/xcb/kxutils.cpp
         platforms/xcb/netwm.cpp
+        kx11extras.cpp
    )
 
    # we install kkeyserver_x11.h which needs the X11 headers available
@@ -112,11 +107,10 @@ if (WIN32)
 # FIXME: adjust kwindowinfo_win to inherit from KWindowInfoPrivate
 #                                                 kwindowinfo_win.cpp
    )
-   target_link_libraries(KF5WindowSystem
-        PRIVATE
-            Qt5::WinExtras # QtWin::fromHICON(), QtWin::toHICON()
-            ws2_32 # gethostname()
-   )
+   target_link_libraries(KF5WindowSystem PRIVATE ws2_32) # gethostname()
+   if (QT_MAJOR_VERSION EQUAL "5")
+      target_link_libraries(KF5WindowSystem PRIVATE Qt5::WinExtras) # QtWin::fromHICON(), QtWin::toHICON()
+   endif()
 endif ()
 
 ecm_generate_export_header(KF5WindowSystem
@@ -124,7 +118,7 @@ ecm_generate_export_header(KF5WindowSystem
     GROUP_BASE_NAME KF
     VERSION ${KF_VERSION}
     DEPRECATED_BASE_VERSION 0
-    DEPRECATION_VERSIONS 5.0 5.18 5.38 5.62 5.67 5.69 5.80 5.81 5.82
+    DEPRECATION_VERSIONS 5.0 5.18 5.38 5.62 5.67 5.69 5.80 5.81 5.82 5.101 5.102
     EXCLUDE_DEPRECATED_BEFORE_AND_AT ${EXCLUDE_DEPRECATED_BEFORE_AND_AT}
 )
 
@@ -155,7 +149,16 @@ ecm_generate_headers(KWindowSystem_HEADERS
   REQUIRED_HEADERS KWindowSystem_HEADERS
 )
 
-install(TARGETS KF5WindowSystem EXPORT KF5WindowSystemTargets ${KF5_INSTALL_TARGETS_DEFAULT_ARGS})
+if (KWINDOWSYSTEM_HAVE_X11)
+    ecm_generate_headers(KWindowSystem_HEADERS
+    HEADER_NAMES
+    KX11Extras
+
+    REQUIRED_HEADERS KWindowSystem_HEADERS
+    )
+endif()
+
+install(TARGETS KF5WindowSystem EXPORT KF5WindowSystemTargets ${KF_INSTALL_TARGETS_DEFAULT_ARGS})
 
 install(FILES
   # FIXME: It seems odd to install this.

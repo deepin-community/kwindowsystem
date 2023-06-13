@@ -20,6 +20,8 @@
 
 #include <xcb/xcb.h>
 
+#include "cptr_p.h"
+
 Q_DECLARE_METATYPE(KStartupInfoId)
 Q_DECLARE_METATYPE(KStartupInfoData)
 
@@ -33,7 +35,7 @@ public:
     {
         qRegisterMetaType<KStartupInfoId>();
         qRegisterMetaType<KStartupInfoData>();
-        connect(&m_listener, SIGNAL(gotNewStartup(KStartupInfoId, KStartupInfoData)), this, SLOT(slotNewStartup(KStartupInfoId, KStartupInfoData)));
+        connect(&m_listener, &KStartupInfo::gotNewStartup, this, &KStartupInfo_UnitTest::slotNewStartup);
     }
 
 protected Q_SLOTS:
@@ -85,13 +87,13 @@ void KStartupInfo_UnitTest::testStart()
     const QString bin = "dir with space/kstartupinfo_unittest";
     data.setBin(bin);
 
-    QSignalSpy removedSpy(&m_listener, SIGNAL(gotRemoveStartup(KStartupInfoId, KStartupInfoData)));
+    QSignalSpy removedSpy(&m_listener, &KStartupInfo::gotRemoveStartup);
     QVERIFY(removedSpy.isValid());
 
     KStartupInfo::sendStartup(id, data);
     KStartupInfo::sendFinish(id, data);
 
-    QSignalSpy spy(this, SIGNAL(ready()));
+    QSignalSpy spy(this, &KStartupInfo_UnitTest::ready);
     spy.wait(5000);
 
     QCOMPARE(m_receivedCount, 1);
@@ -117,7 +119,7 @@ static void doSync()
     auto *c = QX11Info::connection();
     const auto cookie = xcb_get_input_focus(c);
     xcb_generic_error_t *error = nullptr;
-    QScopedPointer<xcb_get_input_focus_reply_t, QScopedPointerPodDeleter> sync(xcb_get_input_focus_reply(c, cookie, &error));
+    UniqueCPointer<xcb_get_input_focus_reply_t> sync(xcb_get_input_focus_reply(c, cookie, &error));
     if (error) {
         free(error);
     }
@@ -155,7 +157,7 @@ void KStartupInfo_UnitTest::dontCrashCleanup()
         data.setSilent(KStartupInfoData::Yes);
     }
 
-    QSignalSpy spy(&m_listener, SIGNAL(gotRemoveStartup(KStartupInfoId, KStartupInfoData)));
+    QSignalSpy spy(&m_listener, &KStartupInfo::gotRemoveStartup);
     QFETCH(bool, change);
     if (change) {
         KStartupInfo::sendChange(id, data);
@@ -326,12 +328,14 @@ void KStartupInfo_UnitTest::createNewStartupIdForTimestampTest()
 
 void KStartupInfo_UnitTest::setNewStartupIdTest()
 {
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 102)
     {
         QWindow window;
         const QByteArray str = "somefancyidwhichisrandom_kstartupinfo_unittest_2";
         KStartupInfo::setNewStartupId(&window, str);
         QCOMPARE(KStartupInfo::startupId(), str);
     }
+#endif
 
 #if KWINDOWSYSTEM_ENABLE_DEPRECATED_SINCE(5, 62)
     {
