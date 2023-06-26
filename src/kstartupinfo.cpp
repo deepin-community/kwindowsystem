@@ -59,11 +59,13 @@
 #include <X11/Xlib.h>
 #include <fixx11h.h>
 #include <kwindowsystem.h>
+#include <kx11extras.h>
 #include <kxmessages.h>
 #endif
 
+#if KWINDOWSYSTEM_HAVE_X11
 static const char NET_STARTUP_MSG[] = "_NET_STARTUP_INFO";
-static const char NET_STARTUP_WINDOW[] = "_NET_STARTUP_ID";
+#endif
 // DESKTOP_STARTUP_ID is used also in kinit/wrapper.c ,
 // kdesu in both kdelibs and kdebase and who knows where else
 static const char NET_STARTUP_ENV[] = "DESKTOP_STARTUP_ID";
@@ -684,7 +686,15 @@ bool KStartupInfo::sendFinishXcb(xcb_connection_t *conn, int screen, const KStar
 
 void KStartupInfo::appStarted()
 {
-    appStarted(startupId());
+    QByteArray startupId = s_startup_id;
+
+#if KWINDOWSYSTEM_HAVE_X11
+    if (startupId.isEmpty()) {
+        startupId = QX11Info::nextStartupId();
+    }
+#endif
+
+    appStarted(startupId);
     setStartupId("0"); // reset the id, no longer valid (must use clearStartupId() to avoid infinite loop)
 }
 
@@ -702,6 +712,7 @@ void KStartupInfo::appStarted(const QByteArray &startup_id)
 #endif
 }
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 102)
 void KStartupInfo::silenceStartup(bool silence)
 {
     KStartupInfoId id;
@@ -713,7 +724,9 @@ void KStartupInfo::silenceStartup(bool silence)
     data.setSilent(silence ? KStartupInfoData::Yes : KStartupInfoData::No);
     sendChange(id, data);
 }
+#endif
 
+#if KWINDOWSYSTEM_BUILD_DEPRECATED_SINCE(5, 102)
 QByteArray KStartupInfo::startupId()
 {
     if (s_startup_id.isEmpty()) {
@@ -724,10 +737,11 @@ QByteArray KStartupInfo::startupId()
 
     return s_startup_id;
 }
+#endif
 
 void KStartupInfo::setStartupId(const QByteArray &startup_id)
 {
-    if (startup_id == startupId()) {
+    if (startup_id == s_startup_id) {
         return;
     }
     if (startup_id.isEmpty()) {
@@ -777,12 +791,12 @@ void KStartupInfo::setNewStartupId(QWindow *window, const QByteArray &startup_id
             }
         }
         if (activate) {
-            KWindowSystem::setOnDesktop(window->winId(), KWindowSystem::currentDesktop());
+            KX11Extras::setOnDesktop(window->winId(), KX11Extras::currentDesktop());
             // This is not very nice, but there's no way how to get any
             // usable timestamp without ASN, so force activating the window.
             // And even with ASN, it's not possible to get the timestamp here,
             // so if the WM doesn't have support for ASN, it can't be used either.
-            KWindowSystem::forceActiveWindow(window->winId());
+            KX11Extras::forceActiveWindow(window->winId());
         }
     }
 #else

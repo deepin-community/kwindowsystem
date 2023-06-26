@@ -14,9 +14,12 @@
 #include <kmanagerselection.h>
 #include <kwindoweffects.h>
 #include <kwindowsystem.h>
+#include <kx11extras.h>
 #include <netwm.h>
 #include <qtest_widgets.h>
 #include <xcb/xcb.h>
+
+#include "cptr_p.h"
 
 Q_DECLARE_METATYPE(KWindowEffects::SlideFromLocation)
 Q_DECLARE_METATYPE(KWindowEffects::Effect)
@@ -63,8 +66,8 @@ private:
 #endif
     xcb_atom_t m_thumbnails;
     xcb_atom_t m_blur;
-    QScopedPointer<QWindow> m_window;
-    QScopedPointer<QWidget> m_widget;
+    std::unique_ptr<QWindow> m_window;
+    std::unique_ptr<QWidget> m_widget;
 };
 
 void KWindowEffectsTest::initTestCase()
@@ -90,8 +93,8 @@ void KWindowEffectsTest::getHelperAtom(const QByteArray &name, xcb_atom_t *atom)
     xcb_connection_t *c = QX11Info::connection();
     xcb_intern_atom_cookie_t atomCookie = xcb_intern_atom_unchecked(c, false, name.length(), name.constData());
 
-    QScopedPointer<xcb_intern_atom_reply_t, QScopedPointerPodDeleter> reply(xcb_intern_atom_reply(c, atomCookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_intern_atom_reply_t> reply(xcb_intern_atom_reply(c, atomCookie, nullptr));
+    QVERIFY(reply);
     *atom = reply->atom;
 }
 
@@ -111,7 +114,7 @@ void KWindowEffectsTest::testSlideWindow()
     QFETCH(int, offset);
     QFETCH(KWindowEffects::SlideFromLocation, location);
 
-    KWindowEffects::slideWindow(m_window.data(), location, offset);
+    KWindowEffects::slideWindow(m_window.get(), location, offset);
     performSlideWindowTest(m_window->winId(), offset, location);
 }
 
@@ -119,11 +122,11 @@ void KWindowEffectsTest::testSlideWindowRemove()
 {
     xcb_window_t window = m_window->winId();
     // first install the atom
-    KWindowEffects::slideWindow(m_window.data(), KWindowEffects::TopEdge, 0);
+    KWindowEffects::slideWindow(m_window.get(), KWindowEffects::TopEdge, 0);
     performSlideWindowTest(window, 0, KWindowEffects::TopEdge);
 
     // now delete it
-    KWindowEffects::slideWindow(m_window.data(), KWindowEffects::NoEdge, 0);
+    KWindowEffects::slideWindow(m_window.get(), KWindowEffects::NoEdge, 0);
     performSlideWindowRemoveTest(window);
 }
 
@@ -131,12 +134,12 @@ void KWindowEffectsTest::performSlideWindowTest(xcb_window_t window, int offset,
 {
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, window, m_slide, m_slide, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->format, uint8_t(32));
     QCOMPARE(reply->value_len, uint32_t(2));
     QCOMPARE(reply->type, m_slide);
-    int32_t *data = static_cast<int32_t *>(xcb_get_property_value(reply.data()));
+    int32_t *data = static_cast<int32_t *>(xcb_get_property_value(reply.get()));
     QCOMPARE(data[0], offset);
     QCOMPARE(data[1], locationToValue(location));
 }
@@ -150,8 +153,8 @@ void KWindowEffectsTest::performAtomIsRemoveTest(xcb_window_t window, xcb_atom_t
 {
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, window, atom, atom, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->type, xcb_atom_t(XCB_ATOM_NONE));
 }
 
@@ -193,12 +196,12 @@ void KWindowEffectsTest::testPresentWindows()
 
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, m_window->winId(), m_presentWindows, m_presentWindows, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->format, uint8_t(32));
     QCOMPARE(reply->value_len, uint32_t(1));
     QCOMPARE(reply->type, m_presentWindows);
-    int32_t *data = static_cast<int32_t *>(xcb_get_property_value(reply.data()));
+    int32_t *data = static_cast<int32_t *>(xcb_get_property_value(reply.get()));
     QCOMPARE(data[0], desktop);
 }
 #endif
@@ -210,8 +213,8 @@ void KWindowEffectsTest::testPresentWindowsEmptyGroup()
 
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, m_window->winId(), m_presentWindowsGroup, m_presentWindowsGroup, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->type, xcb_atom_t(XCB_ATOM_NONE));
 }
 #endif
@@ -278,12 +281,12 @@ void KWindowEffectsTest::performWindowsOnPropertyTest(xcb_atom_t atom, const QLi
 {
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, m_window->winId(), atom, atom, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->type, atom);
     QCOMPARE(reply->format, uint8_t(32));
     QCOMPARE(reply->value_len, uint32_t(windows.size()));
-    int32_t *data = static_cast<int32_t *>(xcb_get_property_value(reply.data()));
+    int32_t *data = static_cast<int32_t *>(xcb_get_property_value(reply.get()));
     for (int i = 0; i < windows.size(); ++i) {
         QCOMPARE(data[i], int32_t(windows.at(i)));
     }
@@ -306,15 +309,15 @@ void KWindowEffectsTest::testBlur()
 {
     QFETCH(QRegion, blur);
 
-    KWindowEffects::enableBlurBehind(m_window.data(), true, blur);
+    KWindowEffects::enableBlurBehind(m_window.get(), true, blur);
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, m_window->winId(), m_blur, XCB_ATOM_CARDINAL, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->type, xcb_atom_t(XCB_ATOM_CARDINAL));
     QCOMPARE(reply->format, uint8_t(32));
     QCOMPARE(reply->value_len, uint32_t(blur.rectCount() * 4));
-    uint32_t *data = static_cast<uint32_t *>(xcb_get_property_value(reply.data()));
+    uint32_t *data = static_cast<uint32_t *>(xcb_get_property_value(reply.get()));
     int dataOffset = 0;
     for (const QRect &rect : blur) {
         QCOMPARE(data[dataOffset++], uint32_t(rect.x()));
@@ -326,19 +329,19 @@ void KWindowEffectsTest::testBlur()
 
 void KWindowEffectsTest::testBlurDisable()
 {
-    KWindowEffects::enableBlurBehind(m_window.data(), false);
+    KWindowEffects::enableBlurBehind(m_window.get(), false);
     performAtomIsRemoveTest(m_window->winId(), m_blur);
 
-    KWindowEffects::enableBlurBehind(m_window.data(), true);
+    KWindowEffects::enableBlurBehind(m_window.get(), true);
     // verify that it got added
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, m_window->winId(), m_blur, XCB_ATOM_CARDINAL, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->type, xcb_atom_t(XCB_ATOM_CARDINAL));
 
     // and disable
-    KWindowEffects::enableBlurBehind(m_window.data(), false);
+    KWindowEffects::enableBlurBehind(m_window.get(), false);
     performAtomIsRemoveTest(m_window->winId(), m_blur);
 }
 
@@ -349,22 +352,22 @@ void KWindowEffectsTest::testMarkAsDashboard()
     // should not yet be set
     xcb_connection_t *c = QX11Info::connection();
     xcb_get_property_cookie_t cookie = xcb_get_property_unchecked(c, false, m_window->winId(), XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 100);
-    QScopedPointer<xcb_get_property_reply_t, QScopedPointerPodDeleter> reply(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    UniqueCPointer<xcb_get_property_reply_t> reply(xcb_get_property_reply(c, cookie, nullptr));
+    QVERIFY(reply);
     QCOMPARE(reply->type, xcb_atom_t(XCB_ATOM_STRING));
     QCOMPARE(reply->format, uint8_t(8));
-    char *data = static_cast<char *>(xcb_get_property_value(reply.data()));
+    char *data = static_cast<char *>(xcb_get_property_value(reply.get()));
     QVERIFY(QByteArray(data) != className);
 
     // now mark as dashboard
     KWindowEffects::markAsDashboard(m_window->winId());
     cookie = xcb_get_property_unchecked(c, false, m_window->winId(), XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 0, 100);
     reply.reset(xcb_get_property_reply(c, cookie, nullptr));
-    QVERIFY(!reply.isNull());
+    QVERIFY(reply);
     QCOMPARE(reply->type, xcb_atom_t(XCB_ATOM_STRING));
     QCOMPARE(reply->format, uint8_t(8));
     QCOMPARE(reply->value_len, uint32_t(19));
-    data = static_cast<char *>(xcb_get_property_value(reply.data()));
+    data = static_cast<char *>(xcb_get_property_value(reply.get()));
     QCOMPARE(QByteArray(data), className);
     data = data + 10;
     QCOMPARE(QByteArray(data), className);
@@ -399,11 +402,11 @@ void KWindowEffectsTest::testEffectAvailable()
     QFETCH(KWindowEffects::Effect, effect);
     // without a compositing manager it's not available
     // try-verify as there still might be the selection claimed from previous data run
-    QTRY_VERIFY(!KWindowSystem::compositingActive());
+    QTRY_VERIFY(!KX11Extras::compositingActive());
     QVERIFY(!KWindowEffects::isEffectAvailable(effect));
 
     // fake the compositor
-    QSignalSpy compositingChangedSpy(KWindowSystem::self(), &KWindowSystem::compositingChanged);
+    QSignalSpy compositingChangedSpy(KX11Extras::self(), &KX11Extras::compositingChanged);
     QVERIFY(compositingChangedSpy.isValid());
     KSelectionOwner compositorSelection("_NET_WM_CM_S0");
     QSignalSpy claimedSpy(&compositorSelection, &KSelectionOwner::claimedOwnership);
@@ -412,7 +415,7 @@ void KWindowEffectsTest::testEffectAvailable()
     QVERIFY(claimedSpy.wait());
     QCOMPARE(compositingChangedSpy.count(), 1);
     QCOMPARE(compositingChangedSpy.first().first().toBool(), true);
-    QVERIFY(KWindowSystem::compositingActive());
+    QVERIFY(KX11Extras::compositingActive());
 
     // but not yet available
     QVERIFY(!KWindowEffects::isEffectAvailable(effect));
@@ -421,8 +424,8 @@ void KWindowEffectsTest::testEffectAvailable()
     QFETCH(QByteArray, propertyName);
     xcb_connection_t *c = QX11Info::connection();
     xcb_intern_atom_cookie_t atomCookie = xcb_intern_atom_unchecked(c, false, propertyName.length(), propertyName.constData());
-    QScopedPointer<xcb_intern_atom_reply_t, QScopedPointerPodDeleter> atom(xcb_intern_atom_reply(c, atomCookie, nullptr));
-    QVERIFY(!atom.isNull());
+    UniqueCPointer<xcb_intern_atom_reply_t> atom(xcb_intern_atom_reply(c, atomCookie, nullptr));
+    QVERIFY(atom);
     unsigned char dummy = 0;
     xcb_change_property(c, XCB_PROP_MODE_REPLACE, QX11Info::appRootWindow(), atom->atom, atom->atom, 8, 1, &dummy);
     xcb_flush(c);
@@ -441,7 +444,7 @@ void KWindowEffectsTest::testEffectAvailable()
     QVERIFY(compositingChangedSpy.wait());
     QCOMPARE(compositingChangedSpy.count(), 2);
     QCOMPARE(compositingChangedSpy.last().first().toBool(), false);
-    QVERIFY(!KWindowSystem::compositingActive());
+    QVERIFY(!KX11Extras::compositingActive());
 }
 
 QTEST_MAIN(KWindowEffectsTest)

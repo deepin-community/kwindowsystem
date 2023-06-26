@@ -7,6 +7,7 @@
 #include <QFileSystemWatcher>
 #include <QProcess>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTest>
 
 class TestKWindowsystemPlatformWayland : public QObject
@@ -19,14 +20,16 @@ private Q_SLOTS:
     void testWithHelper();
 
 private:
-    QScopedPointer<QProcess> m_westonProcess;
+    std::unique_ptr<QProcess> m_westonProcess;
 };
 
 void TestKWindowsystemPlatformWayland::initTestCase()
 {
+    const QString westonExec = QStandardPaths::findExecutable(QStringLiteral("weston"));
+
     // start Weston
     m_westonProcess.reset(new QProcess);
-    m_westonProcess->setProgram(QStringLiteral("weston"));
+    m_westonProcess->setProgram(westonExec);
     m_westonProcess->setArguments(QStringList({QStringLiteral("--socket=kwindowsystem-platform-wayland-0"), QStringLiteral("--backend=headless-backend.so")}));
     m_westonProcess->start();
     if (!m_westonProcess->waitForStarted()) {
@@ -43,8 +46,8 @@ void TestKWindowsystemPlatformWayland::initTestCase()
         return;
     }
 
-    QScopedPointer<QFileSystemWatcher> socketWatcher(new QFileSystemWatcher(QStringList({runtimeDir.absolutePath()})));
-    QSignalSpy socketSpy(socketWatcher.data(), &QFileSystemWatcher::directoryChanged);
+    std::unique_ptr<QFileSystemWatcher> socketWatcher(new QFileSystemWatcher(QStringList({runtimeDir.absolutePath()})));
+    QSignalSpy socketSpy(socketWatcher.get(), &QFileSystemWatcher::directoryChanged);
     QVERIFY(socketSpy.isValid());
 
     // limit to max of 10 waits
@@ -58,7 +61,7 @@ void TestKWindowsystemPlatformWayland::initTestCase()
 
 void TestKWindowsystemPlatformWayland::cleanupTestCase()
 {
-    if (m_westonProcess.isNull()) {
+    if (!m_westonProcess) {
         return;
     }
     m_westonProcess->terminate();
@@ -73,14 +76,14 @@ void TestKWindowsystemPlatformWayland::testWithHelper()
     QString processName = QFINDTESTDATA("kwindowsystem_platform_wayland_helper");
     QVERIFY(!processName.isEmpty());
 
-    QScopedPointer<QProcess> helper(new QProcess);
+    QProcess helper;
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert(QStringLiteral("WAYLAND_DISPLAY"), QStringLiteral("kwindowsystem-platform-wayland-0"));
-    helper->setProgram(processName);
-    helper->setProcessEnvironment(env);
-    helper->start();
-    QVERIFY(helper->waitForFinished());
-    QCOMPARE(helper->exitCode(), 0);
+    helper.setProgram(processName);
+    helper.setProcessEnvironment(env);
+    helper.start();
+    QVERIFY(helper.waitForFinished());
+    QCOMPARE(helper.exitCode(), 0);
 }
 
 QTEST_GUILESS_MAIN(TestKWindowsystemPlatformWayland)

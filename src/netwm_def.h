@@ -328,7 +328,7 @@ struct NETFullscreenMonitors {
   are used to retrieve and modify the properties of windows. To keep
   the namespace relatively clean, all enums are defined here.
 
-  @see http://www.freedesktop.org/standards/wm-spec/
+  @see https://specifications.freedesktop.org/wm-spec/wm-spec-latest.html
  **/
 
 class KWINDOWSYSTEM_EXPORT NET
@@ -439,6 +439,10 @@ public:
             @since 5.58
         **/
         CriticalNotification = 17, // NON STANDARD
+        /**
+         * indicates that this window is an applet.
+         */
+        AppletPopup = 18, // NON STANDARD
     };
 
     /**
@@ -465,6 +469,7 @@ public:
         DNDIconMask = 1u << 15, ///< @see DNDIcon
         OnScreenDisplayMask = 1u << 16, ///< NON STANDARD @see OnScreenDisplay @since 5.6
         CriticalNotificationMask = 1u << 17, ///< NON STANDARD @see CriticalNotification @since 5.58
+        AppletPopupMask = 1u << 18, ///< NON STANDARD @see AppletPopup
         AllTypesMask = 0U - 1, ///< All window types.
     };
     /**
@@ -781,6 +786,8 @@ public:
         @li WM2OpaqueRegion
         @li WM2DesktopFileName the base name of the desktop file name or the full path to the desktop file
         @li WM2GTKFrameExtents extents of the shadow drawn by the client
+        @li WM2GTKApplicationId _GTK_APPLICATION_ID
+        @li WM2GTKShowWindowMenu _GTK_SHOW_WINDOW_MENU
 
         @see Properties2
     **/
@@ -816,6 +823,8 @@ public:
         WM2GTKFrameExtents = 1u << 27, // NOT STANDARD @since 5.65
         WM2AppMenuServiceName = 1u << 28, // NOT STANDARD @since 5.69
         WM2AppMenuObjectPath = 1u << 29, // NOT STANDARD @since 5.69
+        WM2GTKApplicationId = 1u << 30, // NOT STANDARD @since 5.91
+        WM2GTKShowWindowMenu = 1u << 31, // NOT STANDARD @since 5.96
         WM2AllProperties = ~0u,
     };
     /**

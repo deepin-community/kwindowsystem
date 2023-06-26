@@ -25,6 +25,7 @@
 #endif
 
 #include <kwindowsystem.h>
+#include <kx11extras.h>
 #include <kxutils_p.h>
 
 #include <assert.h>
@@ -156,6 +157,7 @@ static void refdec_nwi(NETWinInfoPrivate *p)
         delete[] p->activities;
         delete[] p->client_machine;
         delete[] p->desktop_file;
+        delete[] p->gtk_application_id;
         delete[] p->appmenu_object_path;
         delete[] p->appmenu_service_name;
 
@@ -668,8 +670,8 @@ void NETRootInfo::setCurrentDesktop(int desktop, bool ignore_viewport)
         uint32_t d = p->current_desktop - 1;
         xcb_change_property(p->conn, XCB_PROP_MODE_REPLACE, p->root, p->atom(_NET_CURRENT_DESKTOP), XCB_ATOM_CARDINAL, 32, 1, (const void *)&d);
     } else {
-        if (!ignore_viewport && KWindowSystem::mapViewport()) {
-            KWindowSystem::setCurrentDesktop(desktop);
+        if (!ignore_viewport && KX11Extras::mapViewport()) {
+            KX11Extras::setCurrentDesktop(desktop);
             return;
         }
 
@@ -937,6 +939,9 @@ void NETRootInfo::setSupported()
         if (p->windowTypes & CriticalNotificationMask) {
             atoms[pnum++] = p->atom(_KDE_NET_WM_WINDOW_TYPE_CRITICAL_NOTIFICATION);
         }
+        if (p->windowTypes & AppletPopupMask) {
+            atoms[pnum++] = p->atom(_KDE_NET_WM_WINDOW_TYPE_APPLET_POPUP);
+        }
     }
 
     if (p->properties & WMState) {
@@ -1105,6 +1110,10 @@ void NETRootInfo::setSupported()
 
     if (p->properties2 & WM2GTKFrameExtents) {
         atoms[pnum++] = p->atom(_GTK_FRAME_EXTENTS);
+    }
+
+    if (p->properties2 & WM2GTKShowWindowMenu) {
+        atoms[pnum++] = p->atom(_GTK_SHOW_WINDOW_MENU);
     }
 
     xcb_change_property(p->conn, XCB_PROP_MODE_REPLACE, p->root, p->atom(_NET_SUPPORTED), XCB_ATOM_ATOM, 32, pnum, (const void *)atoms);
@@ -1278,6 +1287,8 @@ void NETRootInfo::updateSupportedProperties(xcb_atom_t atom)
         p->windowTypes |= OnScreenDisplayMask;
     } else if (atom == p->atom(_KDE_NET_WM_WINDOW_TYPE_CRITICAL_NOTIFICATION)) {
         p->windowTypes |= CriticalNotificationMask;
+    } else if (atom == p->atom(_KDE_NET_WM_WINDOW_TYPE_APPLET_POPUP)) {
+        p->windowTypes |= AppletPopupMask;
     }
 
     else if (atom == p->atom(_NET_WM_STATE)) {
@@ -1420,6 +1431,10 @@ void NETRootInfo::updateSupportedProperties(xcb_atom_t atom)
 
     else if (atom == p->atom(_GTK_FRAME_EXTENTS)) {
         p->properties2 |= WM2GTKFrameExtents;
+    }
+
+    else if (atom == p->atom(_GTK_SHOW_WINDOW_MENU)) {
+        p->properties2 |= WM2GTKShowWindowMenu;
     }
 
     else if (atom == p->atom(_KDE_NET_WM_APPMENU_OBJECT_PATH)) {
@@ -1577,6 +1592,16 @@ void NETRootInfo::moveResizeWindowRequest(xcb_window_t window, int flags, int x,
     const uint32_t data[5] = {uint32_t(flags), uint32_t(x), uint32_t(y), uint32_t(width), uint32_t(height)};
 
     send_client_message(p->conn, netwm_sendevent_mask, p->root, window, p->atom(_NET_MOVERESIZE_WINDOW), data);
+}
+
+void NETRootInfo::showWindowMenuRequest(xcb_window_t window, int device_id, int x_root, int y_root)
+{
+#ifdef NETWMDEBUG
+    fprintf(stderr, "NETRootInfo::showWindowMenuRequest: requesting menu for 0x%lx (%d, %d, %d)\n", window, device_id, x_root, y_root);
+#endif
+
+    const uint32_t data[5] = {uint32_t(device_id), uint32_t(x_root), uint32_t(y_root), 0, 0};
+    send_client_message(p->conn, netwm_sendevent_mask, p->root, window, p->atom(_GTK_SHOW_WINDOW_MENU), data);
 }
 
 void NETRootInfo::restackRequest(xcb_window_t window, RequestSource src, xcb_window_t above, int detail, xcb_timestamp_t timestamp)
@@ -1789,6 +1814,17 @@ void NETRootInfo::event(xcb_generic_event_t *event, NET::Properties *properties,
 #endif
 
             changeShowingDesktop(message->data.data32[0]);
+        } else if (message->type == p->atom(_GTK_SHOW_WINDOW_MENU)) {
+#ifdef NETWMDEBUG
+            fprintf(stderr,
+                    "NETRootInfo::event: showWindowMenu(%ld, %ld, %ld, %ld)\n",
+                    message->window,
+                    message->data.data32[0],
+                    message->data.data32[1],
+                    message->data.data32[2]);
+#endif
+
+            showWindowMenu(message->window, message->data.data32[0], message->data.data32[1], message->data.data32[2]);
         }
     }
 
@@ -2454,16 +2490,16 @@ NET::DesktopLayoutCorner NETRootInfo::desktopLayoutCorner() const
 
 int NETRootInfo::numberOfDesktops(bool ignore_viewport) const
 {
-    if (!ignore_viewport && KWindowSystem::mapViewport()) {
-        return KWindowSystem::numberOfDesktops();
+    if (!ignore_viewport && KX11Extras::mapViewport()) {
+        return KX11Extras::numberOfDesktops();
     }
     return p->number_of_desktops == 0 ? 1 : p->number_of_desktops;
 }
 
 int NETRootInfo::currentDesktop(bool ignore_viewport) const
 {
-    if (!ignore_viewport && KWindowSystem::mapViewport()) {
-        return KWindowSystem::currentDesktop();
+    if (!ignore_viewport && KX11Extras::mapViewport()) {
+        return KX11Extras::currentDesktop();
     }
     return p->current_desktop == 0 ? 1 : p->current_desktop;
 }
@@ -2521,6 +2557,7 @@ NETWinInfo::NETWinInfo(xcb_connection_t *connection,
     p->icon_sizes = nullptr;
     p->activities = (char *)nullptr;
     p->desktop_file = nullptr;
+    p->gtk_application_id = nullptr;
     p->appmenu_object_path = nullptr;
     p->appmenu_service_name = nullptr;
     p->blockCompositing = false;
@@ -2583,6 +2620,7 @@ NETWinInfo::NETWinInfo(xcb_connection_t *connection, xcb_window_t window, xcb_wi
     p->icon_sizes = nullptr;
     p->activities = (char *)nullptr;
     p->desktop_file = nullptr;
+    p->gtk_application_id = nullptr;
     p->appmenu_object_path = nullptr;
     p->appmenu_service_name = nullptr;
     p->blockCompositing = false;
@@ -3139,6 +3177,12 @@ void NETWinInfo::setWindowType(WindowType type)
         data[1] = p->atom(_NET_WM_WINDOW_TYPE_NOTIFICATION);
         len = 2;
         break;
+    
+    case AppletPopup:
+        data[0] = p->atom(_KDE_NET_WM_WINDOW_TYPE_APPLET_POPUP);
+        data[1] = XCB_NONE;
+        len = 1;
+        break;
 
     default:
     case Normal:
@@ -3249,8 +3293,8 @@ void NETWinInfo::setDesktop(int desktop, bool ignore_viewport)
             return; // We can't do that while being managed
         }
 
-        if (!ignore_viewport && KWindowSystem::mapViewport()) {
-            KWindowSystem::setOnDesktop(p->window, desktop);
+        if (!ignore_viewport && KX11Extras::mapViewport()) {
+            KX11Extras::setOnDesktop(p->window, desktop);
             return;
         }
 
@@ -3792,10 +3836,14 @@ void NETWinInfo::event(xcb_generic_event_t *event, NET::Properties *properties, 
             dirty2 |= WM2OpaqueRegion;
         } else if (pe->atom == p->atom(_KDE_NET_WM_DESKTOP_FILE)) {
             dirty2 = WM2DesktopFileName;
+        } else if (pe->atom == p->atom(_GTK_APPLICATION_ID)) {
+            dirty2 = WM2GTKApplicationId;
         } else if (pe->atom == p->atom(_NET_WM_FULLSCREEN_MONITORS)) {
             dirty2 = WM2FullscreenMonitors;
         } else if (pe->atom == p->atom(_GTK_FRAME_EXTENTS)) {
             dirty2 |= WM2GTKFrameExtents;
+        } else if (pe->atom == p->atom(_GTK_SHOW_WINDOW_MENU)) {
+            dirty2 |= WM2GTKShowWindowMenu;
         } else if (pe->atom == p->atom(_KDE_NET_WM_APPMENU_SERVICE_NAME)) {
             dirty2 |= WM2AppMenuServiceName;
         } else if (pe->atom == p->atom(_KDE_NET_WM_APPMENU_OBJECT_PATH)) {
@@ -3986,6 +4034,10 @@ void NETWinInfo::update(NET::Properties dirtyProperties, NET::Properties2 dirtyP
 
     if (dirty2 & WM2DesktopFileName) {
         cookies[c++] = xcb_get_property(p->conn, false, p->window, p->atom(_KDE_NET_WM_DESKTOP_FILE), p->atom(UTF8_STRING), 0, MAX_PROP_SIZE);
+    }
+
+    if (dirty2 & WM2GTKApplicationId) {
+        cookies[c++] = xcb_get_property(p->conn, false, p->window, p->atom(_GTK_APPLICATION_ID), p->atom(UTF8_STRING), 0, MAX_PROP_SIZE);
     }
 
     if (dirty2 & WM2GTKFrameExtents) {
@@ -4247,6 +4299,10 @@ void NETWinInfo::update(NET::Properties dirtyProperties, NET::Properties2 dirtyP
 
                 else if (type == p->atom(_KDE_NET_WM_WINDOW_TYPE_CRITICAL_NOTIFICATION)) {
                     p->types[pos++] = CriticalNotification;
+                }
+
+                else if (type == p->atom(_KDE_NET_WM_WINDOW_TYPE_APPLET_POPUP)) {
+                    p->types[pos++] = AppletPopup;
                 }
             }
         }
@@ -4591,6 +4647,16 @@ void NETWinInfo::update(NET::Properties dirtyProperties, NET::Properties2 dirtyP
         }
     }
 
+    if (dirty2 & WM2GTKApplicationId) {
+        delete[] p->gtk_application_id;
+        p->gtk_application_id = nullptr;
+
+        const QByteArray id = get_string_reply(p->conn, cookies[c++], p->atom(UTF8_STRING));
+        if (id.length() > 0) {
+            p->gtk_application_id = nstrndup(id.constData(), id.length());
+        }
+    }
+
     if (dirty2 & WM2GTKFrameExtents) {
         p->gtk_frame_extents = NETStrut();
 
@@ -4677,6 +4743,7 @@ case type: \
         CHECK_TYPE_MASK(DNDIcon)
         CHECK_TYPE_MASK(OnScreenDisplay)
         CHECK_TYPE_MASK(CriticalNotification)
+        CHECK_TYPE_MASK(AppletPopup)
 #undef CHECK_TYPE_MASK
     default:
         break;
@@ -4722,7 +4789,7 @@ const char *NETWinInfo::visibleIconName() const
 
 int NETWinInfo::desktop(bool ignore_viewport) const
 {
-    if (!ignore_viewport && KWindowSystem::mapViewport()) {
+    if (!ignore_viewport && KX11Extras::mapViewport()) {
         const KWindowInfo info(p->window, NET::WMDesktop);
         return info.desktop();
     }
@@ -4928,6 +4995,11 @@ void NETWinInfo::setDesktopFileName(const char *name)
 const char *NETWinInfo::desktopFileName() const
 {
     return p->desktop_file;
+}
+
+const char *NETWinInfo::gtkApplicationId() const
+{
+    return p->gtk_application_id;
 }
 
 void NETRootInfo::virtual_hook(int, void *)
